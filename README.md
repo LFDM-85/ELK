@@ -1,373 +1,454 @@
-# Elastic stack (ELK) on Docker
+# Elastic Stack (ELK) on Docker
 
 [![Elastic Stack version](https://img.shields.io/badge/Elastic%20Stack-9.2.2-00bfb3?style=flat&logo=elastic-stack)](https://www.elastic.co/blog/category/releases)
 [![Build Status](https://github.com/deviantony/docker-elk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/deviantony/docker-elk/actions/workflows/ci.yml?query=branch%3Amain)
 
-Run the latest version of the [Elastic stack][elk-stack] with Docker and Docker Compose.
+## 📖 About This Project
 
-It gives you the ability to analyze any data set by using the searching/aggregation capabilities of Elasticsearch and
-the visualization power of Kibana.
+This repository is based on the excellent [deviantony/docker-elk](https://github.com/deviantony/docker-elk) project, providing a complete implementation of the [Elastic stack][elk-stack] using Docker and Docker Compose.
 
-Based on the [official Docker images][elastic-docker] from Elastic:
+The stack enables you to analyze any dataset using Elasticsearch's powerful search and aggregation capabilities combined with Kibana's visualization features.
 
-* [Elasticsearch](https://github.com/elastic/elasticsearch/tree/main/distribution/docker)
-* [Logstash](https://github.com/elastic/logstash/tree/main/docker)
-* [Kibana](https://github.com/elastic/kibana/tree/main/src/dev/build/tasks/os_packages/docker_generator)
+### 🎯 Project Philosophy
 
-Other available stack variants:
+This setup aims to make the Elastic stack as accessible as possible for development and testing. It is **not designed for production deployment**, but rather serves as a flexible template for exploration and experimentation.
 
-* [`tls`](https://github.com/deviantony/docker-elk/tree/tls): TLS encryption enabled in Elasticsearch, Kibana (opt in),
-  and Fleet
+The configuration is intentionally minimal and unopinionated, prioritizing clear documentation over complex automation. The initial setup requires no external dependencies and uses minimal scripting.
+
+### 🧩 Core Components
+
+Built on [official Docker images][elastic-docker] from Elastic:
+
+- **[Elasticsearch](https://github.com/elastic/elasticsearch/tree/main/distribution/docker)** - Distributed search and analytics engine
+- **[Logstash](https://github.com/elastic/logstash/tree/main/docker)** - Server-side data processing pipeline
+- **[Kibana](https://github.com/elastic/kibana/tree/main/src/dev/build/tasks/os_packages/docker_generator)** - Data visualization and exploration tool
+
+### 📦 Available Extensions
+
+The stack includes several optional extensions in the `extensions/` directory:
+
+- **Curator** - Elasticsearch index lifecycle management
+- **Filebeat** - Lightweight shipper for log files
+- **Fleet Server** - Centralized agent management
+- **APM Server** - Application performance monitoring
+- **Heartbeat** - Uptime monitoring
+- **Metricbeat** - System and service metrics collector
+
+### 🔐 Licensing Note
 
 > [!IMPORTANT]
-> [Platinum][subscriptions] features are enabled by default for a [trial][license-mngmt] duration of **30 days**. After
-> this evaluation period, you will retain access to all the free features included in the Open Basic license seamlessly,
-> without manual intervention required, and without losing any data. Refer to the [How to disable paid
-> features](#how-to-disable-paid-features) section to opt out of this behaviour.
+> [Platinum][subscriptions] features are enabled by default for a **30-day trial period**. After the trial expires, you automatically retain access to all free features included in the Open Basic license, with no data loss or manual intervention required. See [How to disable paid features](#how-to-disable-paid-features) to opt out of this behavior.
+
+### 🌐 Alternative Stack Variants
+
+- [`tls`](https://github.com/deviantony/docker-elk/tree/tls) - TLS encryption enabled in Elasticsearch, Kibana (optional), and Fleet
 
 ---
 
-## tl;dr
+## 🚀 Quick Start
+
+### Initial Setup
 
 ```sh
+# 1. Clone the repository
+git clone https://github.com/LFDM-85/ELK.git
+cd ELK
+
+# 2. Run the setup service (initializes users and roles)
 docker compose up setup
-```
 
-```sh
+# 3. (Optional but recommended) Generate Kibana encryption keys
+docker compose up kibana-genkeys
+# Copy the output to kibana/config/kibana.yml
+
+# 4. Start the stack
 docker compose up
 ```
+
+After about a minute, access Kibana at <http://localhost:5601>
+
+**Default credentials:**
+- **User:** `elastic`
+- **Password:** `changeme`
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/6f67cbc0-ddee-44bf-8f4d-7fd2d70f5217">
   <img alt="Animated demo" src="https://github.com/user-attachments/assets/501a340a-e6df-4934-90a2-6152b462c14a">
 </picture>
 
----
-
-## Philosophy
-
-The main goal of docker-elk is to make the Elastic stack as easy as possible to get into. It is **not a blueprint for a
-production-ready deployment**, but rather a _template_ that promotes tweaking and exploration.
-
-The authors believe in good documentation over elaborate automation. The project's default configuration is purposely
-minimal and unopinionated. The initial setup does not rely on any external dependency, and uses as little scripting as
-necessary to get things up and running.
+> [!NOTE]
+> Run services in detached mode by adding the `-d` flag: `docker compose up -d`
 
 ---
 
-## Contents
+## 📋 Table of Contents
 
 1. [Requirements](#requirements)
-   * [Host setup](#host-setup)
-   * [Docker Desktop](#docker-desktop)
-     * [Windows](#windows)
-     * [macOS](#macos)
-1. [Usage](#usage)
-   * [Bringing up the stack](#bringing-up-the-stack)
-   * [Initial setup](#initial-setup)
-     * [Setting up user authentication](#setting-up-user-authentication)
-     * [Injecting data](#injecting-data)
-   * [Cleanup](#cleanup)
-   * [Version selection](#version-selection)
-1. [Configuration](#configuration)
-   * [How to configure Elasticsearch](#how-to-configure-elasticsearch)
-   * [How to configure Kibana](#how-to-configure-kibana)
-   * [How to configure Logstash](#how-to-configure-logstash)
-   * [How to disable paid features](#how-to-disable-paid-features)
-   * [How to scale out the Elasticsearch cluster](#how-to-scale-out-the-elasticsearch-cluster)
-   * [How to re-execute the setup](#how-to-re-execute-the-setup)
-   * [How to reset a password programmatically](#how-to-reset-a-password-programmatically)
-1. [Extensibility](#extensibility)
-   * [How to add plugins](#how-to-add-plugins)
-   * [How to enable the provided extensions](#how-to-enable-the-provided-extensions)
-1. [JVM tuning](#jvm-tuning)
-   * [How to specify the amount of memory used by a service](#how-to-specify-the-amount-of-memory-used-by-a-service)
-   * [How to enable a remote JMX connection to a service](#how-to-enable-a-remote-jmx-connection-to-a-service)
-1. [Going further](#going-further)
-   * [Plugins and integrations](#plugins-and-integrations)
+2. [Installation & Setup](#installation--setup)
+3. [Security Configuration](#security-configuration)
+4. [Data Ingestion](#data-ingestion)
+5. [Configuration](#configuration)
+6. [Extensions](#extensions)
+7. [Performance Tuning](#performance-tuning)
+8. [Maintenance](#maintenance)
+9. [Troubleshooting](#troubleshooting)
 
-## Requirements
+---
 
-### Host setup
+## 📦 Requirements
 
-* [Docker Engine][docker-install] version **18.06.0** or newer
-* [Docker Compose][compose-install] version **2.0.0** or newer
-* 1.5 GB of RAM
+### System Requirements
+
+- **Docker Engine** version 18.06.0 or newer
+- **Docker Compose** version 2.0.0 or newer
+- **RAM:** Minimum 1.5 GB (4 GB+ recommended)
 
 > [!NOTE]
-> Especially on Linux, make sure your user has the [required permissions][linux-postinstall] to interact with the Docker
-> daemon.
+> On Linux, ensure your user has the [required permissions][linux-postinstall] to interact with the Docker daemon.
+
+### Exposed Ports
 
 By default, the stack exposes the following ports:
 
-* 5044: Logstash Beats input
-* 50000: Logstash TCP input
-* 9600: Logstash monitoring API
-* 9200: Elasticsearch HTTP
-* 9300: Elasticsearch TCP transport
-* 5601: Kibana
+| Port  | Service                     |
+|-------|-----------------------------|
+| 5044  | Logstash Beats input        |
+| 50000 | Logstash TCP input          |
+| 9600  | Logstash monitoring API     |
+| 9200  | Elasticsearch HTTP          |
+| 9300  | Elasticsearch TCP transport |
+| 5601  | Kibana                      |
+| 8220  | Fleet Server (optional)     |
+| 8200  | APM Server (optional)       |
 
-> [!WARNING]
-> Elasticsearch's [bootstrap checks][bootstrap-checks] were purposely disabled to facilitate the setup of the Elastic
-> stack in development environments. For production setups, we recommend users to set up their host according to the
-> instructions from the Elasticsearch documentation: [Important System Configuration][es-sys-config].
-
-### Docker Desktop
+### Platform-Specific Notes
 
 #### Windows
 
-If you are using the legacy Hyper-V mode of _Docker Desktop for Windows_, ensure that [File
-Sharing][desktop-filesharing] is enabled for the `C:` drive.
+If using legacy Hyper-V mode in Docker Desktop for Windows, enable [File Sharing][desktop-filesharing] for the `C:` drive.
 
 #### macOS
 
-The default configuration of _Docker Desktop for Mac_ allows mounting files from `/Users/`, `/Volume/`, `/private/`,
-`/tmp` and `/var/folders` exclusively. Make sure the repository is cloned in one of those locations or follow the
-instructions from the [documentation][desktop-filesharing] to add more locations.
-
-## Usage
+Docker Desktop for Mac allows mounting files from `/Users/`, `/Volume/`, `/private/`, `/tmp`, and `/var/folders` only. Clone the repository in one of these locations or configure additional paths in [Docker Desktop settings][desktop-filesharing].
 
 > [!WARNING]
-> You must rebuild the stack images with `docker compose build` whenever you switch branch or update the
-> [version](#version-selection) of an already existing stack.
+> Elasticsearch's [bootstrap checks][bootstrap-checks] are disabled to simplify development setup. For production deployments, follow the [Important System Configuration][es-sys-config] guide.
 
-### Bringing up the stack
+---
 
-Clone this repository onto the Docker host that will run the stack with the command below:
+## ⚙️ Installation & Setup
 
-```sh
-git clone https://github.com/deviantony/docker-elk.git
-```
+### Step 1: Initialize the Stack
 
-Then, initialize the Elasticsearch users and groups required by docker-elk by executing the command:
+> [!WARNING]
+> Rebuild stack images with `docker compose build` after switching branches or updating component versions.
 
 ```sh
+# Clone the repository
+git clone https://github.com/LFDM-85/ELK.git
+cd ELK
+
+# Initialize Elasticsearch users and roles
 docker compose up setup
 ```
 
-Optionally (but highly recommended), generate encryption keys for Kibana using the following command and copy its output
-to the Kibana configuration file (`kibana/config/kibana.yml`):
+### Step 2: Generate Kibana Encryption Keys (Recommended)
 
 ```sh
 docker compose up kibana-genkeys
 ```
 
-If everything went well and the setup completed without error, start the other stack components:
+Copy the generated keys to `kibana/config/kibana.yml`.
+
+### Step 3: Start the Stack
 
 ```sh
 docker compose up
 ```
 
-> [!NOTE]
-> You can also run all services in the background (detached mode) by appending the `-d` flag to the above command.
+Wait approximately one minute for Kibana to initialize, then access the web UI at <http://localhost:5601>.
 
-Give Kibana about a minute to initialize, then access the Kibana web UI by opening <http://localhost:5601> in a web
-browser and use the following (default) credentials to log in:
+### Step 4: Initial Login
 
-* user: *elastic*
-* password: *changeme*
-
-> [!NOTE]
-> Upon the initial startup, the `elastic`, `logstash_internal` and `kibana_system` Elasticsearch users are initialized
-> with the values of the passwords defined in the [`.env`](.env) file (_"changeme"_ by default). The first one is the
-> [built-in superuser][builtin-users], the other two are used by Kibana and Logstash respectively to communicate with
-> Elasticsearch. This task is only performed during the _initial_ startup of the stack. To change users' passwords
-> _after_ they have been initialized, please refer to the instructions in the next section.
-
-### Initial setup
-
-#### Setting up user authentication
+Use the default credentials:
+- **Username:** `elastic`
+- **Password:** `changeme`
 
 > [!NOTE]
-> Refer to [Security settings in Elasticsearch][es-security] to disable authentication.
+> The `elastic`, `logstash_internal`, and `kibana_system` users are initialized with passwords from the `.env` file (default: `changeme`). Change these passwords immediately for security.
+
+---
+
+## 🔒 Security Configuration
+
+### Changing Default Passwords
 
 > [!WARNING]
-> Starting with Elastic v8.0.0, it is no longer possible to run Kibana using the bootstrapped privileged `elastic` user.
+> The default `changeme` password is **insecure**. Reset all passwords immediately.
 
-The _"changeme"_ password set by default for all aforementioned users is **unsecure**. For increased security, we will
-reset the passwords of all aforementioned Elasticsearch users to random secrets.
-
-1. Reset passwords for default users
-
-    The commands below reset the passwords of the `elastic`, `logstash_internal` and `kibana_system` users. Take note
-    of them.
-
-    ```sh
-    docker compose exec elasticsearch bin/elasticsearch-reset-password --batch --user elastic
-    ```
-
-    ```sh
-    docker compose exec elasticsearch bin/elasticsearch-reset-password --batch --user logstash_internal
-    ```
-
-    ```sh
-    docker compose exec elasticsearch bin/elasticsearch-reset-password --batch --user kibana_system
-    ```
-
-    If the need for it arises (e.g. if you want to [collect monitoring information][ls-monitoring] through Beats and
-    other components), feel free to repeat this operation at any time for the rest of the [built-in
-    users][builtin-users].
-
-1. Replace usernames and passwords in configuration files
-
-    Replace the password of the `elastic` user inside the `.env` file with the password generated in the previous step.
-    Its value isn't used by any core component, but [extensions](#how-to-enable-the-provided-extensions) use it to
-    connect to Elasticsearch.
-
-    > [!NOTE]
-    > In case you don't plan on using any of the provided [extensions](#how-to-enable-the-provided-extensions), or
-    > prefer to create your own roles and users to authenticate these services, it is safe to remove the
-    > `ELASTIC_PASSWORD` entry from the `.env` file altogether after the stack has been initialized.
-
-    Replace the password of the `logstash_internal` user inside the `.env` file with the password generated in the
-    previous step. Its value is referenced inside the Logstash pipeline file (`logstash/pipeline/logstash.conf`).
-
-    Replace the password of the `kibana_system` user inside the `.env` file with the password generated in the previous
-    step. Its value is referenced inside the Kibana configuration file (`kibana/config/kibana.yml`).
-
-    See the [Configuration](#configuration) section below for more information about these configuration files.
-
-1. Restart Logstash and Kibana to re-connect to Elasticsearch using the new passwords
-
-    ```sh
-    docker compose up -d logstash kibana
-    ```
-
-> [!NOTE]
-> Learn more about the security of the Elastic stack at [Secure the Elastic Stack][sec-cluster].
-
-#### Injecting data
-
-Launch the Kibana web UI by opening <http://localhost:5601> in a web browser, and use the following credentials to log
-in:
-
-* user: *elastic*
-* password: *\<your generated elastic password>*
-
-Now that the stack is fully configured, you can go ahead and inject some log entries.
-
-The shipped Logstash configuration allows you to send data over the TCP port 50000. For example, you can use one of the
-following commands — depending on your installed version of `nc` (Netcat) — to ingest the content of the log file
-`/path/to/logfile.log` in Elasticsearch, via Logstash:
+#### 1. Generate Secure Passwords
 
 ```sh
-# Execute `nc -h` to determine your `nc` version
+# Reset elastic user password
+docker compose exec elasticsearch bin/elasticsearch-reset-password --batch --user elastic
 
+# Reset logstash_internal user password
+docker compose exec elasticsearch bin/elasticsearch-reset-password --batch --user logstash_internal
+
+# Reset kibana_system user password
+docker compose exec elasticsearch bin/elasticsearch-reset-password --batch --user kibana_system
+```
+
+**Save these generated passwords securely.**
+
+#### 2. Update Configuration Files
+
+Update the `.env` file with the new passwords:
+
+```env
+ELASTIC_PASSWORD=<generated_elastic_password>
+LOGSTASH_INTERNAL_PASSWORD=<generated_logstash_password>
+KIBANA_SYSTEM_PASSWORD=<generated_kibana_password>
+```
+
+These passwords are referenced in:
+- `logstash/pipeline/logstash.conf` (logstash_internal)
+- `kibana/config/kibana.yml` (kibana_system)
+
+#### 3. Restart Services
+
+```sh
+docker compose up -d logstash kibana
+```
+
+### Resetting Passwords via API
+
+If unable to use Kibana, reset passwords using the Elasticsearch API:
+
+```sh
+curl -XPOST -D- 'http://localhost:9200/_security/user/elastic/_password' \
+    -H 'Content-Type: application/json' \
+    -u elastic:<current_password> \
+    -d '{"password" : "<new_password>"}'
+```
+
+> [!NOTE]
+> Learn more about securing the Elastic Stack at [Secure the Elastic Stack][sec-cluster].
+> 
+> To disable authentication entirely, refer to [Security settings in Elasticsearch][es-security].
+
+---
+
+## 📊 Data Ingestion
+
+### Using Logstash TCP Input
+
+The default configuration accepts data on TCP port 50000. Send log data using `netcat`:
+
+```sh
+# Determine your nc version first
+nc -h
+
+# Then use the appropriate command:
 cat /path/to/logfile.log | nc -q0 localhost 50000          # BSD
 cat /path/to/logfile.log | nc -c localhost 50000           # GNU
 cat /path/to/logfile.log | nc --send-only localhost 50000  # nmap
 ```
 
-You can also load the sample data provided by your Kibana installation.
+### Using Sample Data
 
-### Cleanup
+Load sample datasets directly from Kibana:
+1. Navigate to <http://localhost:5601>
+2. Go to **Home** → **Add data**
+3. Select a sample dataset (e.g., Sample web logs, Sample flight data)
 
-Elasticsearch data is persisted inside a volume by default.
+---
 
-In order to entirely shutdown the stack and remove all persisted data, use the following Docker Compose command:
-
-```sh
-docker compose --profile=setup down -v
-```
-
-### Version selection
-
-This repository stays aligned with the latest version of the Elastic stack. The `main` branch tracks the current major
-version (9.x).
-
-To use a different version of the core Elastic components, simply change the version number inside the [`.env`](.env)
-file. If you are upgrading an existing stack, remember to rebuild all container images using the `docker compose build`
-command.
+## 🛠️ Configuration
 
 > [!IMPORTANT]
-> Always pay attention to the [official upgrade instructions][upgrade] for each individual component before performing a
-> stack upgrade.
+> Configuration changes require service restarts. The stack does not support dynamic reloading.
 
-Older major versions are also supported on separate branches:
+### Elasticsearch Configuration
 
-* [`release-8.x`](https://github.com/deviantony/docker-elk/tree/release-8.x): 8.x series
-* [`release-7.x`](https://github.com/deviantony/docker-elk/tree/release-7.x): 7.x series (End-of-Life)
-* [`release-6.x`](https://github.com/deviantony/docker-elk/tree/release-6.x): 6.x series (End-of-life)
-* [`release-5.x`](https://github.com/deviantony/docker-elk/tree/release-5.x): 5.x series (End-of-life)
+**Primary configuration file:** [`elasticsearch/config/elasticsearch.yml`][config-es]
 
-## Configuration
-
-> [!IMPORTANT]
-> Configuration is not dynamically reloaded, you will need to restart individual components after any configuration
-> change.
-
-### How to configure Elasticsearch
-
-The Elasticsearch configuration is stored in [`elasticsearch/config/elasticsearch.yml`][config-es].
-
-You can also specify the options you want to override by setting environment variables inside the Compose file:
+**Environment variable overrides** (in `docker-compose.yml`):
 
 ```yml
 elasticsearch:
-
   environment:
     network.host: _non_loopback_
     cluster.name: my-cluster
 ```
 
-Please refer to the following documentation page for more details about how to configure Elasticsearch inside Docker
-containers: [Install Elasticsearch with Docker][es-docker].
+**Documentation:** [Install Elasticsearch with Docker][es-docker]
 
-### How to configure Kibana
+### Kibana Configuration
 
-The Kibana default configuration is stored in [`kibana/config/kibana.yml`][config-kbn].
+**Primary configuration file:** [`kibana/config/kibana.yml`][config-kbn]
 
-You can also specify the options you want to override by setting environment variables inside the Compose file:
+**Environment variable overrides:**
 
 ```yml
 kibana:
-
   environment:
     SERVER_NAME: kibana.example.org
 ```
 
-Please refer to the following documentation page for more details about how to configure Kibana inside Docker
-containers: [Install Kibana with Docker][kbn-docker].
+**Documentation:** [Install Kibana with Docker][kbn-docker]
 
-### How to configure Logstash
+### Logstash Configuration
 
-The Logstash configuration is stored in [`logstash/config/logstash.yml`][config-ls].
+**Primary configuration file:** [`logstash/config/logstash.yml`][config-ls]
 
-You can also specify the options you want to override by setting environment variables inside the Compose file:
+**Pipeline configuration:** [`logstash/pipeline/logstash.conf`](logstash/pipeline/logstash.conf)
+
+**Environment variable overrides:**
 
 ```yml
 logstash:
-
   environment:
     LOG_LEVEL: debug
 ```
 
-Please refer to the following documentation page for more details about how to configure Logstash inside Docker
-containers: [Configuring Logstash for Docker][ls-docker].
+**Documentation:** [Configuring Logstash for Docker][ls-docker]
 
-### How to disable paid features
+### Disabling Paid Features
 
-You can cancel an ongoing trial before its expiry date — and thus revert to a basic license — either from the [License
-Management][license-mngmt] panel of Kibana, or using Elasticsearch's `start_basic` [Licensing API][license-apis]. Please
-note that the second option is the only way to recover access to Kibana if the license isn't either switched to `basic`
-or upgraded before the trial's expiry date.
+To revert to a basic license before trial expiration:
 
-Changing the license type by switching the value of Elasticsearch's `xpack.license.self_generated.type` setting from
-`trial` to `basic` (see [License settings][license-settings]) will only work **if done prior to the initial setup.**
-After a trial has been started, the loss of features from `trial` to `basic` _must_ be acknowledged using one of the two
-methods described in the first paragraph.
+**Option 1: Via Kibana UI**
+- Navigate to **Management** → **Stack Management** → **License Management**
+- Click **Revert to Basic**
 
-### How to scale out the Elasticsearch cluster
+**Option 2: Via API**
+```sh
+curl -XPOST 'http://localhost:9200/_license/start_basic?acknowledge=true' \
+    -u elastic:<password>
+```
 
-Follow the instructions from the Wiki: [Scaling out Elasticsearch](https://github.com/deviantony/docker-elk/wiki/Elasticsearch-cluster)
+> [!NOTE]
+> Changing `xpack.license.self_generated.type` from `trial` to `basic` in configuration only works **before initial setup**. After trial activation, use one of the methods above.
 
-### How to re-execute the setup
+### Scaling Elasticsearch
 
-To run the setup container again and re-initialize all users for which a password was defined inside the `.env` file,
-simply "up" the `setup` Compose service again:
+See the Wiki guide: [Scaling out Elasticsearch](https://github.com/deviantony/docker-elk/wiki/Elasticsearch-cluster)
 
-```console
-$ docker compose up setup
+### Version Selection
+
+**Current branch:** Tracks Elastic Stack 9.x
+
+To use a different version:
+1. Update `ELASTIC_VERSION` in the [`.env`](.env) file
+2. Rebuild images: `docker compose build`
+
+**Available version branches:**
+- [`release-8.x`](https://github.com/deviantony/docker-elk/tree/release-8.x) - 8.x series
+- [`release-7.x`](https://github.com/deviantony/docker-elk/tree/release-7.x) - 7.x series (End-of-Life)
+- [`release-6.x`](https://github.com/deviantony/docker-elk/tree/release-6.x) - 6.x series (End-of-Life)
+- [`release-5.x`](https://github.com/deviantony/docker-elk/tree/release-5.x) - 5.x series (End-of-Life)
+
+> [!IMPORTANT]
+> Always review [official upgrade instructions][upgrade] before upgrading component versions.
+
+---
+
+## 🔌 Extensions
+
+### Available Extensions
+
+Several optional integrations are provided in the [`extensions/`](extensions/) directory:
+
+- **Curator** - Index lifecycle management and curation
+- **Filebeat** - Log file shipping
+- **Fleet Server** - Elastic Agent management
+- **APM Server** - Application performance monitoring
+- **Heartbeat** - Uptime and availability monitoring
+- **Metricbeat** - Infrastructure metrics collection
+
+### Enabling Extensions
+
+Each extension includes its own documentation in the respective subdirectory. Some may require configuration changes to core components.
+
+### Adding Plugins
+
+To add plugins to any component:
+
+1. Add a `RUN` statement to the component's `Dockerfile`:
+   ```dockerfile
+   RUN logstash-plugin install logstash-filter-json
+   ```
+
+2. Update the service configuration with plugin-specific settings
+
+3. Rebuild the image:
+   ```sh
+   docker compose build <service_name>
+   ```
+
+---
+
+## ⚡ Performance Tuning
+
+### JVM Memory Configuration
+
+Control memory allocation using environment variables:
+
+| Service       | Environment Variable |
+|---------------|---------------------|
+| Elasticsearch | `ES_JAVA_OPTS`      |
+| Logstash      | `LS_JAVA_OPTS`      |
+
+**Default allocations** (in `docker-compose.yml`):
+- Elasticsearch: 4 GB heap
+- Logstash: 256 MB heap
+
+**Example - Increase Logstash memory:**
+
+```yml
+logstash:
+  environment:
+    LS_JAVA_OPTS: -Xms1g -Xmx1g
+```
+
+**Default behavior when not set:**
+- Elasticsearch: [Automatically determined heap size][es-heap]
+- Logstash: Fixed 1 GB heap
+
+### JMX Remote Monitoring
+
+Enable JMX for monitoring and management:
+
+```yml
+logstash:
+  environment:
+    LS_JAVA_OPTS: >-
+      -Dcom.sun.management.jmxremote
+      -Dcom.sun.management.jmxremote.ssl=false
+      -Dcom.sun.management.jmxremote.authenticate=false
+      -Dcom.sun.management.jmxremote.port=18080
+      -Dcom.sun.management.jmxremote.rmi.port=18080
+      -Djava.rmi.server.hostname=DOCKER_HOST_IP
+      -Dcom.sun.management.jmxremote.local.only=false
+```
+
+Replace `DOCKER_HOST_IP` with your Docker host's IP address.
+
+---
+
+## 🧹 Maintenance
+
+### Re-running Setup
+
+To reinitialize users with passwords from `.env`:
+
+```sh
+docker compose up setup
+```
+
+**Example output:**
+```
  ⠿ Container docker-elk-elasticsearch-1  Running
  ⠿ Container docker-elk-setup-1          Created
 Attaching to docker-elk-setup-1
@@ -379,93 +460,79 @@ docker-elk-setup-1  |    ⠿ User exists, setting password
 docker-elk-setup-1 exited with code 0
 ```
 
-### How to reset a password programmatically
+### Complete Cleanup
 
-If for any reason your are unable to use Kibana to change the password of your users (including [built-in
-users][builtin-users]), you can use the Elasticsearch API instead and achieve the same result.
-
-In the example below, we reset the password of the `elastic` user (notice "/user/elastic" in the URL):
+To stop all services and remove persisted data:
 
 ```sh
-curl -XPOST -D- 'http://localhost:9200/_security/user/elastic/_password' \
-    -H 'Content-Type: application/json' \
-    -u elastic:<your current elastic password> \
-    -d '{"password" : "<your new password>"}'
+docker compose --profile=setup down -v
 ```
 
-## Extensibility
+> [!WARNING]
+> This command permanently deletes all Elasticsearch data stored in volumes.
 
-### How to add plugins
+---
 
-To add plugins to any ELK component you have to:
+## 🐛 Troubleshooting
 
-1. Add a `RUN` statement to the corresponding `Dockerfile` (eg. `RUN logstash-plugin install logstash-filter-json`)
-1. Add the associated plugin code configuration to the service configuration (eg. Logstash input/output)
-1. Rebuild the images using the `docker compose build` command
+### Common Issues
 
-### How to enable the provided extensions
+**Issue: "max virtual memory areas vm.max_map_count [65530] is too low"**
+```sh
+# Linux/macOS
+sudo sysctl -w vm.max_map_count=262144
 
-A few extensions are available inside the [`extensions`](extensions) directory. These extensions provide features which
-are not part of the standard Elastic stack, but can be used to enrich it with extra integrations.
-
-The documentation for these extensions is provided inside each individual subdirectory, on a per-extension basis. Some
-of them require manual changes to the default ELK configuration.
-
-## JVM tuning
-
-### How to specify the amount of memory used by a service
-
-The startup scripts for Elasticsearch and Logstash can append extra JVM options from the value of an environment
-variable, allowing the user to adjust the amount of memory that can be used by each component:
-
-| Service       | Environment variable |
-|---------------|----------------------|
-| Elasticsearch | ES_JAVA_OPTS         |
-| Logstash      | LS_JAVA_OPTS         |
-
-To accommodate environments where memory is scarce (Docker Desktop for Mac has only 2 GB available by default), the Heap
-Size allocation is capped by default in the `docker-compose.yml` file to 512 MB for Elasticsearch and 256 MB for
-Logstash. If you want to override the default JVM configuration, edit the matching environment variable(s) in the
-`docker-compose.yml` file.
-
-For example, to increase the maximum JVM Heap Size for Logstash:
-
-```yml
-logstash:
-
-  environment:
-    LS_JAVA_OPTS: -Xms1g -Xmx1g
+# Windows (WSL2)
+wsl -d docker-desktop
+sysctl -w vm.max_map_count=262144
 ```
 
-When these options are not set:
+**Issue: Services fail to start due to memory**
+- Increase Docker memory allocation in Docker Desktop settings
+- Reduce JVM heap sizes in `docker-compose.yml`
 
-* Elasticsearch starts with a JVM Heap Size that is [determined automatically][es-heap].
-* Logstash starts with a fixed JVM Heap Size of 1 GB.
+**Issue: Kibana shows "Unable to connect to Elasticsearch"**
+- Check Elasticsearch logs: `docker compose logs elasticsearch`
+- Verify passwords in `.env` match those set in Elasticsearch
+- Wait 1-2 minutes for Elasticsearch to fully initialize
 
-### How to enable a remote JMX connection to a service
+### Viewing Logs
 
-As for the Java Heap memory (see above), you can specify JVM options to enable JMX and map the JMX port on the Docker
-host.
+```sh
+# View all logs
+docker compose logs
 
-Update the `{ES,LS}_JAVA_OPTS` environment variable with the following content (I've mapped the JMX service on the port
-18080, you can change that). Do not forget to update the `-Djava.rmi.server.hostname` option with the IP address of your
-Docker host (replace **DOCKER_HOST_IP**):
+# Follow logs for specific service
+docker compose logs -f elasticsearch
 
-```yml
-logstash:
-
-  environment:
-    LS_JAVA_OPTS: -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.port=18080 -Dcom.sun.management.jmxremote.rmi.port=18080 -Djava.rmi.server.hostname=DOCKER_HOST_IP -Dcom.sun.management.jmxremote.local.only=false
+# View last 100 lines
+docker compose logs --tail=100
 ```
 
-## Going further
+---
 
-### Plugins and integrations
+## 🔗 Additional Resources
 
-See the following Wiki pages:
+### Documentation Links
 
-* [External applications](https://github.com/deviantony/docker-elk/wiki/External-applications)
-* [Popular integrations](https://github.com/deviantony/docker-elk/wiki/Popular-integrations)
+- [Elastic Stack Documentation](https://www.elastic.co/guide/index.html)
+- [Docker Compose Documentation](https://docs.docker.com/compose/)
+- [Original Repository Wiki](https://github.com/deviantony/docker-elk/wiki)
+
+### Community Resources
+
+- [External Applications Guide](https://github.com/deviantony/docker-elk/wiki/External-applications)
+- [Popular Integrations](https://github.com/deviantony/docker-elk/wiki/Popular-integrations)
+
+---
+
+## 📄 License
+
+This project follows the licensing of the [original docker-elk repository](https://github.com/deviantony/docker-elk).
+
+The Elastic Stack components are licensed under the [Elastic License](https://www.elastic.co/licensing/elastic-license).
+
+---
 
 [elk-stack]: https://www.elastic.co/elastic-stack/
 [elastic-docker]: https://www.docker.elastic.co/
@@ -497,11 +564,3 @@ See the following Wiki pages:
 [ls-docker]: https://www.elastic.co/docs/reference/logstash/docker-config
 
 [upgrade]: https://www.elastic.co/docs/deploy-manage/upgrade/deployment-or-cluster/self-managed
-
-<!-- markdownlint-configure-file
-{
-  "MD033": {
-    "allowed_elements": [ "picture", "source", "img" ]
-  }
-}
--->
